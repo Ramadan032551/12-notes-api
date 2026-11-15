@@ -1,0 +1,141 @@
+@baseUrl=http://localhost:3000
+@email=notes-owner@example.test
+@otherEmail=notes-other@example.test
+@password=ChangeMe12345
+@otherPassword=OtherChangeMe12345
+@expiredToken=PASTE_A_VALID_EXPIRED_TOKEN_HERE
+
+### Register the note owner
+# @name register
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "name": "Notes Owner",
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+### Login (captures token for subsequent requests)
+# @name login
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+### Get the current user
+# @name me
+GET {{baseUrl}}/api/auth/me
+Authorization: Bearer {{login.response.body.token}}
+
+### Register another user for ownership checks
+# @name registerOther
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "name": "Another User",
+  "email": "{{otherEmail}}",
+  "password": "{{otherPassword}}"
+}
+
+### Login as the other user
+# @name otherLogin
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{otherEmail}}",
+  "password": "{{otherPassword}}"
+}
+
+### List notes with optional filters and pagination
+GET {{baseUrl}}/api/notes?q=meeting&tag=work&pinned=false&page=1&limit=10
+Authorization: Bearer {{login.response.body.token}}
+
+### Create a note (the supplied user_id is ignored)
+# @name createNote
+POST {{baseUrl}}/api/notes
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "user_id": "00000000-0000-4000-8000-000000000000",
+  "title": "Project meeting",
+  "body": "Review the release plan",
+  "tags": ["work", "planning"],
+  "pinned": false
+}
+
+### Get the created note
+GET {{baseUrl}}/api/notes/{{createNote.response.body.note.id}}
+Authorization: Bearer {{login.response.body.token}}
+
+### Update the created note
+PATCH {{baseUrl}}/api/notes/{{createNote.response.body.note.id}}
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "title": "Updated project meeting",
+  "pinned": true
+}
+
+### Another user cannot get this note (404)
+GET {{baseUrl}}/api/notes/{{createNote.response.body.note.id}}
+Authorization: Bearer {{otherLogin.response.body.token}}
+
+### Another user cannot update this note (404)
+PATCH {{baseUrl}}/api/notes/{{createNote.response.body.note.id}}
+Authorization: Bearer {{otherLogin.response.body.token}}
+Content-Type: application/json
+
+{
+  "title": "Attempted unauthorized update"
+}
+
+### Another user cannot delete this note (404)
+DELETE {{baseUrl}}/api/notes/{{createNote.response.body.note.id}}
+Authorization: Bearer {{otherLogin.response.body.token}}
+
+### Missing token (401)
+GET {{baseUrl}}/api/notes
+
+### Garbled token (401)
+GET {{baseUrl}}/api/notes
+Authorization: Bearer not.a.valid.jwt
+
+### Expired token (401); see README for generating a valid expired token
+GET {{baseUrl}}/api/notes
+Authorization: Bearer {{expiredToken}}
+
+### Invalid note UUID (422)
+GET {{baseUrl}}/api/notes/not-a-uuid
+Authorization: Bearer {{login.response.body.token}}
+
+### Invalid note body (422)
+POST {{baseUrl}}/api/notes
+Authorization: Bearer {{login.response.body.token}}
+Content-Type: application/json
+
+{
+  "title": "   ",
+  "body": "A title containing only spaces is invalid"
+}
+
+### Invalid registration fields (422)
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "name": "",
+  "email": "not-an-email",
+  "password": "short"
+}
+
+### Delete the created note (owner only; 204)
+DELETE {{baseUrl}}/api/notes/{{createNote.response.body.note.id}}
+Authorization: Bearer {{login.response.body.token}}
